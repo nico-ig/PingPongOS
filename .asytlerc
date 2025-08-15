@@ -1,0 +1,17 @@
+--style=allman
+--suffix=none
+--max-code-length=100
+
+--convert-tabs
+--pad-oper
+
+--align-pointer=type
+--align-reference=type
+
+--keep-one-line-blocks
+--keep-one-line-statements
+
+--indent=spaces=2
+--indent-switches
+--indent-preproc-block
+--indent-preproc-define
