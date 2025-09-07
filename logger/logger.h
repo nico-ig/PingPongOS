@@ -18,40 +18,49 @@
 #define LOG_LEVEL_DEBUG 3
 #define LOG_LEVEL_TRACE 4
 
-// Default log level
-#ifndef LOG_LEVEL
+#if defined(DEBUG)
 #define LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
 // Define log macros
-#if LOG_LEVEL >= LOG_LEVEL_ERR
-#define LOG_ERR(fmt, ...)   printf(LOG_RED "[ERR] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_ERR)
+#define LOG_ERR(fmt, ...) fprintf(stderr, LOG_RED "[ERR] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#define LOG_ERR0(fmt) fprintf(stderr, LOG_RED "[ERR] " fmt LOG_RESET "\n")
 #else
-#define LOG_ERR(fmt, ...)   ;
+#define LOG_ERR(fmt, ...) ((void)0)
+#define LOG_ERR0(fmt) ((void)0)
 #endif
 
-#if LOG_LEVEL >= LOG_LEVEL_WARN
-#define LOG_WARN(fmt, ...)  printf(LOG_YELLOW "[WARN] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_WARN)
+#define LOG_WARN(fmt, ...) printf(LOG_YELLOW "[WARN] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#define LOG_WARN0(fmt) printf(LOG_YELLOW "[WARN] " fmt LOG_RESET "\n")
 #else
-#define LOG_WARN(fmt, ...)  ;
+#define LOG_WARN(fmt, ...) ((void)0)
+#define LOG_WARN0(fmt) ((void)0)
 #endif
 
-#if LOG_LEVEL >= LOG_LEVEL_INFO
-#define LOG_INFO(fmt, ...)  printf(LOG_GREEN "[INFO] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_INFO)
+#define LOG_INFO(fmt, ...) printf(LOG_GREEN "[INFO] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#define LOG_INFO0(fmt) printf(LOG_GREEN "[INFO] " fmt LOG_RESET "\n")
 #else
-#define LOG_INFO(fmt, ...)  ;
+#define LOG_INFO(fmt, ...) ((void)0)
+#define LOG_INFO0(fmt) ((void)0)
 #endif
 
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_DEBUG)
 #define LOG_DEBUG(fmt, ...) printf(LOG_BLUE "[DEBUG] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#define LOG_DEBUG0(fmt) printf(LOG_BLUE "[DEBUG] " fmt LOG_RESET "\n")
 #else
-#define LOG_DEBUG(fmt, ...) ;
+#define LOG_DEBUG(fmt, ...) ((void)0)
+#define LOG_DEBUG0(fmt) ((void)0)
 #endif
 
-#if LOG_LEVEL >= LOG_LEVEL_TRACE
+#if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_TRACE)
 #define LOG_TRACE(fmt, ...) printf(LOG_CYAN "[TRACE] " fmt LOG_RESET "\n", ##__VA_ARGS__)
+#define LOG_TRACE0(fmt) printf(LOG_CYAN "[TRACE] " fmt LOG_RESET "\n")
 #else
-#define LOG_TRACE(fmt, ...) ;
+#define LOG_TRACE(fmt, ...) ((void)0)
+#define LOG_TRACE0(fmt) ((void)0)
 #endif
 
 #endif
