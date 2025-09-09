@@ -1,197 +1,172 @@
 #include <stdlib.h>
+#include <valgrind/valgrind.h>
+#include <string.h>
 
 #include "ppos.h"
-#include "ppos_core_internal.h"
 #include "ppos_data.h"
 #include "logger.h"
 #include "queue.h"
-#include "task.h"
 #include "dispatcher.h"
+
+#define STACKSIZE 64*1024
 
 ppos_core_t* ppos_core = NULL;
 
-void ppos_init ()
+static void _setup_task_stack(task_t *task, stack_t *stack)
 {
-    LOG_TRACE0("ppos_init: entered");
+    task->vg_id = VALGRIND_STACK_REGISTER(stack, stack + STACKSIZE);
+    task->context.uc_stack.ss_sp = stack;
+    task->context.uc_stack.ss_size = STACKSIZE;
+    task->context.uc_stack.ss_flags = 0;
+}
 
-    LOG_INFO0("ppos_init: initializing PingPongOS system");
+static void _ppos_destroy()
+{
+    if (ppos_core != NULL)
+    {
+        if (ppos_core->dispatcher_task != NULL)
+        {
+            if (ppos_core->dispatcher_task->context.uc_stack.ss_sp)
+            {
+                //free(ppos_core->dispatcher_task->context.uc_stack.ss_sp);
+                VALGRIND_STACK_DEREGISTER(ppos_core->dispatcher_task->vg_id);
+            }
 
-    LOG_TRACE0("ppos_init: setting stdout to unbuffered");
+            free(ppos_core->dispatcher_task);
+        }
+
+        free(ppos_core);
+    }
+}
+
+void ppos_init()
+{
     setvbuf(stdout, 0, _IONBF, 0);
 
-    LOG_TRACE0("ppos_init: initializing ppos_core");
-    if (_init_ppos_core() < PPOS_CORE_SUCCESS) {
-        LOG_ERR("ppos_init: failed to initialize ppos_core");
-        goto exit;
-    }
+    ppos_core = calloc(1, sizeof(ppos_core_t));
+    if (ppos_core == NULL) exit(-1);
 
-    LOG_TRACE0("ppos_init: initializing main task");
-    if (_init_main_task() < PPOS_CORE_SUCCESS) {
-        LOG_ERR("ppos_init: failed to initialize main task");
-        goto exit;
-    }
+    ppos_core->dispatcher_task = calloc(1, sizeof(task_t));
+    if (ppos_core->dispatcher_task == NULL) exit(-1);
 
-    LOG_TRACE0("ppos_init: initializing dispatcher task");
-    if (_init_dispatcher_task() < PPOS_CORE_SUCCESS) {
-        LOG_ERR("ppos_init: failed to initialize dispatcher task");
-        goto exit;
-    }
+    memset(ppos_core->dispatcher_task, 0, sizeof(task_t));
+    memset(&ppos_core->dispatcher_task->context, 0, sizeof(ucontext_t));
 
-exit:
-    LOG_TRACE0("ppos_init: exiting (void)");
+    stack_t *dispatcher_stack = calloc(1, STACKSIZE);
+    if (!dispatcher_stack) exit(-1);
+
+    ppos_core->dispatcher_task->type = TASK_TYPE_DISPATCHER;
+    ppos_core->dispatcher_task->status = TASK_STATUS_READY;
+
+    ppos_core->task_cnt = 1;
+    ppos_core->dispatcher_task->id = ppos_core->task_cnt++;
+    LOG_INFO("ppos_init: task 1 created");
+
+    _setup_task_stack(ppos_core->dispatcher_task, dispatcher_stack);
+    ppos_core->dispatcher_task->context.uc_link = 0;
+
+    if (getcontext(&ppos_core->dispatcher_task->context) < 0) exit(-1);
+    makecontext(&ppos_core->dispatcher_task->context, (void (*)(void))dispatcher, 1, &ppos_core->ready_queue);
+
+    ppos_core->current_task = NULL;
+    ppos_core->ready_queue = NULL;
 }
 
 int task_init(task_t *task, void (*start_func)(void *), void *arg)
 {
-    LOG_TRACE0("task_init: entered");
+    if (task == NULL) return -1;
 
-    LOG_DEBUG("task_init: creating task context");
-    int ret = task_create_context(task, start_func, arg);
+    memset(task, 0, sizeof(task_t));
+    memset(&task->context, 0, sizeof(ucontext_t));
 
-    if (ret < PPOS_CORE_SUCCESS) {
-        LOG_ERR("task_init: failed to create task context");
-        goto exit;
-    }
+    task->id = ppos_core->task_cnt++;
+    task->type = TASK_TYPE_USER;
 
-    LOG_DEBUG("task_init: setting task id");
-    _set_task_id(task);
+    stack_t *stack = calloc(1, STACKSIZE);
+    if (stack == NULL) return -1;
+
+    if (getcontext(&task->context) < 0) return -1;
+    _setup_task_stack(task, stack);
+
+    task->context.uc_link = &ppos_core->dispatcher_task->context;
+    makecontext(&task->context, (void (*)(void))start_func, 1, arg);
 
     task->status = TASK_STATUS_READY;
-    LOG_DEBUG("task_init: new task with id %d created with status %d", task->id, task->status);
+    if (queue_append(&ppos_core->ready_queue, (queue_t*)task) < 0) return -1;
 
-    if (task->type != TASK_TYPE_MAIN && task->type != TASK_TYPE_DISPATCHER) {
-        task->type = TASK_TYPE_USER;
-        LOG_TRACE("task_init: setting task %d type to %d", task->id, task->type);
-    }
-
-    ret = task->id;
-
-    switch (task->type) {
-        case TASK_TYPE_MAIN:
-            LOG_INFO("task_init: main task %d created", task->id);
-            LOG_TRACE0("task_init: main task not added to ready queue");
-            break;
-
-        case TASK_TYPE_DISPATCHER:
-            LOG_INFO("task_init: dispatcher task %d created", task->id);
-            LOG_TRACE0("task_init: dispatcher task not added to ready queue");
-            break;
-
-        default:
-            LOG_INFO("task_init: task %d created", task->id);
-            LOG_DEBUG("task_init: handling user task initialization");
-            ret = task_handle_user_initialization(task);
-            if (ret < PPOS_CORE_SUCCESS) {
-                LOG_ERR("task_init: failed to handle user task initialization");
-                goto exit;
-            }
-            break;
-    }
-
-exit:
-    LOG_TRACE("task_init: exiting (%d)", ret);
-    return ret;
+    LOG_INFO("task_init: task %d created", task->id);
+    return task->id;
 }
 
 int task_id ()
 {
-    LOG_TRACE0("task_id: entered");
-    
-    LOG_TRACE("task_id: getting current task ID");
-    int ret = PPOS_CORE_SUCCESS;
-    
-    if (ppos_core == NULL) {
-        LOG_WARN("task_id: ppos_core is NULL");
-        ret = PPOS_CORE_ERR_NULL_PTR;
-        goto exit;
-    }
-    
-    if (ppos_core->current_task == NULL) {
-        LOG_WARN("task_id: current_task is NULL");
-        ret = PPOS_CORE_ERR_NULL_PTR;
-        goto exit;
-    }
-    
-    ret = ppos_core->current_task->id;
-    LOG_DEBUG("task_id: current task ID is %d", ret);
-
-exit:
-    LOG_TRACE("task_id: exiting (%d)", ret);
-    return ret;
+    return ppos_core->current_task->id;
 }
 
 void task_exit(int exit_code)
 {
-    LOG_TRACE0("task_exit: entered");
 
-    LOG_INFO("task_exit: task %d exiting with code %d", ppos_core->current_task->id, exit_code);
+    if (ppos_core->dispatcher_task->status == TASK_STATUS_READY)
+    {
+        LOG_INFO("task_exit: starting dispatcher context");
 
-    if (ppos_core->current_task->type != TASK_TYPE_DISPATCHER) {
-        LOG_TRACE("task_exit: setting task %d status to terminated", ppos_core->current_task->id);
-        ppos_core->current_task->status = TASK_STATUS_TERMINATED;
+        ppos_core->dispatcher_task->status = TASK_STATUS_RUNNING;
+        ppos_core->current_task = ppos_core->dispatcher_task;
+        setcontext(&ppos_core->dispatcher_task->context);
 
-        LOG_DEBUG("task_exit: switching from task %d to dispatcher task", ppos_core->current_task->id);
-        task_switch(ppos_core->dispatcher_task);
-
-        goto exit;
+        LOG_ERR0("task_exit: should not reach here");
+        exit(-1);
     }
 
-    _ppos_core_destroy();
+    if (ppos_core->dispatcher_task->status == TASK_STATUS_RUNNING)
+    {
+        LOG_INFO("task_exit: finished dispatcher");
+        ppos_core->dispatcher_task->status = TASK_STATUS_TERMINATED;
+        _ppos_destroy();
+        exit(exit_code);
+    }
 
-exit:
-    LOG_TRACE0("task_exit: exiting (void)");
+    LOG_INFO("task_exit: task %d finished", ppos_core->current_task->id);
+    ppos_core->current_task->status = TASK_STATUS_TERMINATED;
     return;
 }
 
 int task_switch(task_t *task)
 {
-    LOG_TRACE("task_switch: entered with task %d", task->id);
-    
-    int ret = task_validate_context_switch_params(task);
-    if (ret < PPOS_CORE_SUCCESS) {
-        LOG_ERR("task_switch: failed to validate context switch parameters (%d)", ret);
-        goto exit;
+    if (task == NULL || ppos_core == NULL || ppos_core->current_task == NULL) return -1;
+
+    LOG_INFO("task_switch: switching from task %d to task %d", ppos_core->current_task->id, task->id);
+
+    task_t* prev_task = ppos_core->current_task;
+
+    prev_task->status = TASK_STATUS_SUSPENDED;
+    task->status = TASK_STATUS_RUNNING;
+
+    ppos_core->current_task = task;
+
+    if (swapcontext(&prev_task->context, &task->context) < 0) {
+        LOG_ERR0("task_switch: failed to switch context");
+        return -1;
     }
 
-    task_t *current_task = ppos_core->current_task;
-    LOG_INFO("task_switch: switching from task %d to task %d", current_task->id, task->id);
+    LOG_DEBUG("task_switch: switched back to task %d", prev_task->id);
 
-    _ppos_core_set_current_task(task);
-    ret = swapcontext(&current_task->context, &task->context);
-
-    if (ret < 0) {
-        LOG_ERR("task_switch: failed to switch context (%d)", ret);
-        ret = PPOS_CORE_ERR_CNTEX;
-        goto exit;
+    if (task->status == TASK_STATUS_RUNNING)
+    {    
+        LOG_WARN("task_switch: task %d is running", task->id);
     }
-    
-    LOG_DEBUG("task_switch: context switched successfully");
-    ret = PPOS_CORE_SUCCESS;
 
-exit:
-    LOG_TRACE("task_switch: exiting (%d)", ret);
-    return ret;
+    prev_task->status = TASK_STATUS_RUNNING;
+    ppos_core->current_task = prev_task;
+
+    return 0;
 }
 
 void task_yield ()
 {
-    LOG_TRACE0("task_yield: entered");
-
     LOG_INFO("task_yield: yielding task %d", ppos_core->current_task->id);
-
-    LOG_TRACE("task_yield: setting task %d status to ready", ppos_core->current_task->id);
     ppos_core->current_task->status = TASK_STATUS_READY;
 
-    LOG_DEBUG("task_yield: appending current task %d to ready queue", ppos_core->current_task->id);
-    int ret = queue_append(&ppos_core->ready_queue, (queue_t*)ppos_core->current_task);
-
-    if (ret < 0) {
-        LOG_WARN("task_yield: failed to append current task %d to ready queue", ppos_core->current_task->id);
-    }
-    
-    LOG_DEBUG("task_yield: switching to dispatcher task");
+    queue_append(&ppos_core->ready_queue, (queue_t*)ppos_core->current_task);
     task_switch(ppos_core->dispatcher_task);
-    
-    LOG_TRACE0("task_yield: exiting (void)");
 }
-

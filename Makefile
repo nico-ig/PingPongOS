@@ -1,12 +1,12 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -O0
-DFLAGS = -std=c99 -g -Wall -Wextra
-INCLUDES = -I./logger -I./ppos_core -I./task -I./dispatcher -I./queue
+CFLAGS = -O0 -g
+DFLAGS = -std=c99 -Wall -Wextra
+INCLUDES = -I./logger -I./ppos_core -I./dispatcher -I./queue
 
 # Source files
 SRCDIR = .
-SOURCES = main.c ppos_core/ppos_core.c ppos_core/ppos_core_internal.c task/task.c task/task_internal.c dispatcher/dispatcher.c dispatcher/dispatcher_internal.c queue/queue.c queue/queue_internal.c
+SOURCES = main.c ppos_core/ppos_core.c dispatcher/dispatcher.c queue/queue.c
 OBJECTS = $(SOURCES:.c=.o)
 TARGET = ppos
 
