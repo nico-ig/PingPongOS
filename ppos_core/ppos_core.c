@@ -10,6 +10,9 @@
 
 #define STACKSIZE 64*1024
 
+#define MIN_PRIORITY -20
+#define MAX_PRIORITY 20
+
 ppos_core_t* ppos_core = NULL;
 
 static void _setup_task_stack(task_t *task, stack_t *stack)
@@ -75,12 +78,15 @@ void ppos_init()
 int task_init(task_t *task, void (*start_func)(void *), void *arg)
 {
     if (task == NULL) return -1;
-
+    
     memset(task, 0, sizeof(task_t));
     memset(&task->context, 0, sizeof(ucontext_t));
 
     task->id = ppos_core->task_cnt++;
     task->type = TASK_TYPE_USER;
+
+    task->priority = 0;
+    task->dynamic_priority = 0;
 
     stack_t *stack = calloc(1, STACKSIZE);
     if (stack == NULL) return -1;
@@ -90,7 +96,7 @@ int task_init(task_t *task, void (*start_func)(void *), void *arg)
 
     task->context.uc_link = &ppos_core->dispatcher_task->context;
     makecontext(&task->context, (void (*)(void))start_func, 1, arg);
-
+    
     task->status = TASK_STATUS_READY;
     if (queue_append(&ppos_core->ready_queue, (queue_t*)task) < 0) return -1;
 
@@ -148,7 +154,7 @@ int task_switch(task_t *task)
         LOG_ERR0("task_switch: failed to switch context");
         return -1;
     }
-
+    
     LOG_DEBUG("task_switch: switched back to task %d", prev_task->id);
 
     if (task->status == TASK_STATUS_RUNNING)
@@ -169,4 +175,39 @@ void task_yield ()
 
     queue_append(&ppos_core->ready_queue, (queue_t*)ppos_core->current_task);
     task_switch(ppos_core->dispatcher_task);
+}
+
+void task_setprio (task_t *task, int prio)
+{
+    if (prio < MIN_PRIORITY)
+    {
+        LOG_WARN("task_setprio: priority %d is lower than minimum priority %d, setting to minimum priority", prio, MIN_PRIORITY);
+        prio = MIN_PRIORITY;
+    } 
+    else if (prio > MAX_PRIORITY)
+    {
+        LOG_WARN("task_setprio: priority %d is higher than maximum priority %d, setting to maximum priority", prio, MAX_PRIORITY);
+        prio = MAX_PRIORITY;
+    }
+
+    if (task == NULL)
+    {
+        task = ppos_core->current_task;
+    }
+    
+    LOG_TRACE("task_setprio: setting task %d priority to %d", task->id, prio);
+
+    task->priority = prio;
+    task->dynamic_priority = prio;
+}
+
+int task_getprio (task_t *task)
+{
+    if (task == NULL)
+    {
+        task = ppos_core->current_task;
+    }
+    
+    LOG_TRACE("task_getprio: getting task %d priority (%d)", task->id, task->priority);
+    return task->priority;
 }

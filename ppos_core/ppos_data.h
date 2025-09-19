@@ -34,6 +34,8 @@ typedef struct task_t
   short status ;			// pronta, rodando, suspensa, ...
   task_type_t type ;			// tipo da tarefa
   int vg_id ;				// ID da pilha da tarefa no Valgrind
+  int priority ;    // prioridade da tarefa
+  int dynamic_priority ; // prioridade dinâmica da tarefa
   // ... (outros campos serão adicionados mais tarde)
 } task_t;
 

@@ -6,9 +6,36 @@
 #include "ppos.h"
 #include "logger.h"
 
-task_t* _scheduler(queue_t *ready_queue)
+#define TASK_AGING_DECAY 1
+
+static task_t* _scheduler(queue_t **ready_queue)
 {
-    return (task_t*)ready_queue;
+    queue_t *queue_head = *ready_queue;
+    task_t* highest_priority_task = (task_t*)queue_head;
+
+    LOG_TRACE("scheduler: starting with task %d (%d) as highest priority", highest_priority_task->id, highest_priority_task->dynamic_priority);
+
+    for (queue_t *queue = queue_head->next; queue != queue_head; queue = queue->next) {
+        LOG_TRACE("scheduler: checking task %d (%d)", ((task_t*)queue)->id, ((task_t*)queue)->dynamic_priority);
+        task_t *task = (task_t*)queue;
+        if (task->dynamic_priority < highest_priority_task->dynamic_priority) {
+            highest_priority_task->dynamic_priority -= TASK_AGING_DECAY;
+            highest_priority_task = task;
+        } else {
+            task->dynamic_priority -= TASK_AGING_DECAY;
+        }
+    }
+
+    if (queue_remove(ready_queue, (queue_t*)highest_priority_task) >= 0) {
+        highest_priority_task->dynamic_priority = highest_priority_task->priority;
+    }
+    else
+    {
+        LOG_WARN("scheduler: failed to remove task %d from ready queue. Priority will not be reset", highest_priority_task->id);
+    }
+
+    LOG_INFO("scheduler: selected task %d with priority %d", highest_priority_task->id, highest_priority_task->dynamic_priority);
+    return highest_priority_task;
 }
 
 void _free_task_stack(task_t *task)
@@ -27,19 +54,9 @@ void dispatcher(queue_t **ready_queue)
     while (queue_size(*ready_queue) > 0) {
         LOG_DEBUG("dispatcher: queue size: %d", queue_size(*ready_queue));
 
-        task_t *next_task = _scheduler(*ready_queue);
-
-        if (queue_remove(ready_queue, (queue_t*)next_task) < 0) {
-            LOG_WARN("dispatcher: failed to remove task %d from ready queue", next_task->id);
-            continue;
-        }
-      
-        if (next_task == NULL) {
-            LOG_WARN("dispatcher: failed to get next task, continuing");
-            continue;
-        }
-        
-        LOG_INFO("dispatcher: running task %d", next_task->id);        
+        task_t *next_task = _scheduler(ready_queue);
+              
+        LOG_TRACE("dispatcher: running task %d", next_task->id);        
         task_switch(next_task);
         LOG_DEBUG("dispatcher: task %d returned", next_task->id);
 
