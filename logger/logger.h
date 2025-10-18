@@ -22,6 +22,8 @@
 #define LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
+#define LOG(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
+
 // Define log macros
 #if defined(LOG_LEVEL) && (LOG_LEVEL >= LOG_LEVEL_ERR)
 #define LOG_ERR(fmt, ...) fprintf(stderr, LOG_RED "[ERR] " fmt LOG_RESET "\n", ##__VA_ARGS__)

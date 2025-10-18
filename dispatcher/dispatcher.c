@@ -11,33 +11,36 @@
 static task_t* _scheduler(queue_t **ready_queue)
 {
     queue_t *queue_head = *ready_queue;
-    task_t* highest_priority_task = (task_t*)queue_head;
+    task_t* priority_task = (task_t*)queue_head;
 
-    LOG_TRACE("scheduler: starting with task %d (%d) as highest priority", highest_priority_task->id, highest_priority_task->dynamic_priority);
+    LOG_TRACE("scheduler: starting with task %d (%d) as priority", priority_task->id, priority_task->dynamic_priority);
 
-    for (queue_t *queue = queue_head; queue != queue_head; queue = queue->next) {
+    for (queue_t *queue = queue_head->next; queue != queue_head; queue = queue->next) {
         LOG_TRACE("scheduler: checking task %d (%d)", ((task_t*)queue)->id, ((task_t*)queue)->dynamic_priority);
-        
+
         task_t *task = (task_t*)queue;
-        if (task->dynamic_priority < highest_priority_task->dynamic_priority) {
-            highest_priority_task->dynamic_priority -= TASK_AGING_DECAY;
-            highest_priority_task = task;
-        } else {
+
+        if (task->dynamic_priority < priority_task->dynamic_priority) {
+            priority_task->dynamic_priority -= TASK_AGING_DECAY;
+            priority_task = task;
+        }
+        else {
             task->dynamic_priority -= TASK_AGING_DECAY;
         }
     }
 
-    if (queue_remove(ready_queue, (queue_t*)highest_priority_task) >= 0) {
-        highest_priority_task->dynamic_priority = highest_priority_task->priority;
-        highest_priority_task->remaining_quantum = highest_priority_task->quantum;
+    LOG_INFO("scheduler: selected task %d with priority %d and quantum %d", priority_task->id, priority_task->dynamic_priority, priority_task->remaining_quantum);
+
+    if (queue_remove(ready_queue, (queue_t*)priority_task) >= 0) {
+        priority_task->dynamic_priority = priority_task->priority;
+        priority_task->remaining_quantum = priority_task->quantum;
     }
     else
     {
-        LOG_WARN("scheduler: failed to remove task %d from ready queue. Priority will not be reset", highest_priority_task->id);
+        LOG_WARN("scheduler: failed to remove task %d from ready queue. Priority will not be reset", priority_task->id);
     }
 
-    LOG_INFO("scheduler: selected task %d with priority %d and quantum %d", highest_priority_task->id, highest_priority_task->dynamic_priority, highest_priority_task->remaining_quantum);
-    return highest_priority_task;
+    return priority_task;
 }
 
 void _free_task_stack(task_t *task)

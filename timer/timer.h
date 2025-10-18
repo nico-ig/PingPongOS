@@ -9,10 +9,10 @@ int timer_signal();
 
 /*
  * @brief Initialize the timer
- * @param timer_tick_handler The handler to be called when the timer ticks
+ * @param usr_tick_handler The handler to be called when the timer ticks
  * @param interval_ms The interval in milliseconds
  * @return void
  */
-int timer_init(void (*timer_tick_handler)(int), long interval_ms);
+int timer_init(void (*usr_tick_handler)(int), long interval_ms);
 
 #endif

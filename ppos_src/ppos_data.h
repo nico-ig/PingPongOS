@@ -18,6 +18,14 @@ typedef enum {
     TASK_TYPE_USER,
 } task_type_t;
 
+typedef struct task_time_t
+{
+    unsigned int creation_time;
+    unsigned int total_cpu_time;
+    unsigned int activations;
+    unsigned int last_start;
+} task_time_t;
+
 typedef struct task_t
 {
   struct task_t *prev, *next;
@@ -29,7 +37,8 @@ typedef struct task_t
   int priority;
   int dynamic_priority;	
   short quantum;			
-  short remaining_quantum;	
+  short remaining_quantum;
+  task_time_t time;
 } task_t;
 
 typedef struct ppos_core {
