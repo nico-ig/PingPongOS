@@ -15,8 +15,9 @@ static task_t* _scheduler(queue_t **ready_queue)
 
     LOG_TRACE("scheduler: starting with task %d (%d) as highest priority", highest_priority_task->id, highest_priority_task->dynamic_priority);
 
-    for (queue_t *queue = queue_head->next; queue != queue_head; queue = queue->next) {
+    for (queue_t *queue = queue_head; queue != queue_head; queue = queue->next) {
         LOG_TRACE("scheduler: checking task %d (%d)", ((task_t*)queue)->id, ((task_t*)queue)->dynamic_priority);
+        
         task_t *task = (task_t*)queue;
         if (task->dynamic_priority < highest_priority_task->dynamic_priority) {
             highest_priority_task->dynamic_priority -= TASK_AGING_DECAY;
@@ -28,13 +29,14 @@ static task_t* _scheduler(queue_t **ready_queue)
 
     if (queue_remove(ready_queue, (queue_t*)highest_priority_task) >= 0) {
         highest_priority_task->dynamic_priority = highest_priority_task->priority;
+        highest_priority_task->remaining_quantum = highest_priority_task->quantum;
     }
     else
     {
         LOG_WARN("scheduler: failed to remove task %d from ready queue. Priority will not be reset", highest_priority_task->id);
     }
 
-    LOG_INFO("scheduler: selected task %d with priority %d", highest_priority_task->id, highest_priority_task->dynamic_priority);
+    LOG_INFO("scheduler: selected task %d with priority %d and quantum %d", highest_priority_task->id, highest_priority_task->dynamic_priority, highest_priority_task->remaining_quantum);
     return highest_priority_task;
 }
 
@@ -54,9 +56,9 @@ void dispatcher(queue_t **ready_queue)
     while (queue_size(*ready_queue) > 0) {
         LOG_DEBUG("dispatcher: queue size: %d", queue_size(*ready_queue));
 
-        task_t *next_task = _scheduler(ready_queue);
-              
-        LOG_TRACE("dispatcher: running task %d", next_task->id);        
+        task_t *next_task = _scheduler(ready_queue);      
+        LOG_TRACE("dispatcher: running task %d", next_task->id);
+        
         task_switch(next_task);
         LOG_DEBUG("dispatcher: task %d returned", next_task->id);
 

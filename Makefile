@@ -1,14 +1,13 @@
 # Compiler and flags
 CC = gcc
 CFLAGS = -O0 -g
-DFLAGS = -std=c99 -Wall -Wextra
-INCLUDES = -I./logger -I./ppos_core -I./dispatcher -I./queue
-
-# Source files
-SRCDIR = .
-SOURCES = main.c ppos_core/ppos_core.c dispatcher/dispatcher.c queue/queue.c
-OBJECTS = $(SOURCES:.c=.o)
+DFLAGS = -std=c99 -Wall -Wextra -D_POSIX_C_SOURCE=200809L
 TARGET = ppos
+
+SRCDIR = .
+INCLUDES = -I$(SRCDIR) -I$(SRCDIR)/logger -I$(SRCDIR)/ppos_src -I$(SRCDIR)/timer -I$(SRCDIR)/queue -I$(SRCDIR)/dispatcher 
+SOURCES = $(SRCDIR)/timer/timer.c $(SRCDIR)/queue/queue.c $(SRCDIR)/dispatcher/dispatcher.c $(SRCDIR)/ppos_src/ppos_core.c $(SRCDIR)/main.c
+OBJECTS = $(SOURCES:.c=.o)
 
 # Default target
 all: $(TARGET)
