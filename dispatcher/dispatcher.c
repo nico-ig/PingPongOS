@@ -15,7 +15,8 @@ static task_t* _scheduler(queue_t **ready_queue)
 
     LOG_TRACE("scheduler: starting with task %d (%d) as priority", priority_task->id, priority_task->dynamic_priority);
 
-    for (queue_t *queue = queue_head->next; queue != queue_head; queue = queue->next) {
+    unsigned int visited = 0;
+    for (queue_t *queue = queue_head->next; visited < queue_size(*ready_queue); queue = queue->next) {
         LOG_TRACE("scheduler: checking task %d (%d)", ((task_t*)queue)->id, ((task_t*)queue)->dynamic_priority);
 
         task_t *task = (task_t*)queue;
@@ -27,6 +28,7 @@ static task_t* _scheduler(queue_t **ready_queue)
         else {
             task->dynamic_priority -= TASK_AGING_DECAY;
         }
+        visited++;
     }
 
     LOG_INFO("scheduler: selected task %d with priority %d and quantum %d", priority_task->id, priority_task->dynamic_priority, priority_task->remaining_quantum);
@@ -64,25 +66,6 @@ void dispatcher(queue_t **ready_queue)
         
         task_switch(next_task);
         LOG_DEBUG("dispatcher: task %d returned", next_task->id);
-
-        switch (next_task->status) {
-            case TASK_STATUS_READY:
-                LOG_DEBUG("dispatcher: task %d is ready", next_task->id);
-                break;
-    
-            case TASK_STATUS_SUSPENDED:
-                LOG_DEBUG("dispatcher: task %d is suspended", next_task->id);
-                break;
-
-            case TASK_STATUS_TERMINATED:
-                LOG_DEBUG("dispatcher: task %d is terminated", next_task->id);
-                _free_task_stack(next_task);
-                break;
-    
-            default:
-                LOG_WARN("dispatcher: task %d has unknown status %d", next_task->id, next_task->status);
-                break;
-        }
     }
 
     LOG_INFO("dispatcher: no more tasks in ready queue");

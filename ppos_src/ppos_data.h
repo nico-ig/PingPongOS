@@ -7,6 +7,7 @@
 #include "queue.h"
 
 typedef enum {
+    TASK_STATUS_CREATED = 0,
     TASK_STATUS_READY = 1,
     TASK_STATUS_RUNNING,
     TASK_STATUS_SUSPENDED,
@@ -31,7 +32,7 @@ typedef struct task_t
   struct task_t *prev, *next;
   int id;
   ucontext_t context;
-  short status;
+  task_status_t status;
   task_type_t type;
   int vg_id;
   int priority;
@@ -39,12 +40,15 @@ typedef struct task_t
   short quantum;			
   short remaining_quantum;
   task_time_t time;
+  int exit_code;
+  queue_t *waiting_queue;
 } task_t;
 
 typedef struct ppos_core {
   unsigned int task_cnt;
   task_t *current_task;
   task_t *dispatcher_task;
+  task_t *main_task;
   queue_t *ready_queue;
 } ppos_core_t;
 

@@ -72,7 +72,7 @@ int queue_append (queue_t **queue, queue_t *elem)
     tail->next = elem;
     head->prev = elem;
 
-    LOG_DEBUG("queue_append: element %p added to queue %p", (void*)elem, (void*)(*queue));
+    LOG_TRACE("queue_append: element %p added to queue %p", (void*)elem, (void*)(*queue));
 
     return 0;
 }
@@ -82,7 +82,7 @@ int queue_remove (queue_t **queue, queue_t *elem)
     if (queue == NULL || elem == NULL) return -1;
     if (_find_element(*queue, elem) != 0) return -1;
 
-    LOG_DEBUG("queue_remove: removing element %p from queue %p", (void*)elem, (void*)(*queue));
+    LOG_TRACE("queue_remove: removing element %p from queue %p", (void*)elem, (void*)(*queue));
 
     queue_t *prev_elem = elem->prev;
     queue_t *next_elem = elem->next;
