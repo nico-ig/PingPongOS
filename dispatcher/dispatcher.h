@@ -6,9 +6,9 @@
 
 /*
  * @brief Dispatcher function
- * @param queue: pointer to the queue to be dispatched
+ * @param core: pointer to the ppos core
  * @return void
  */
-void dispatcher(queue_t **queue);
+void dispatcher(ppos_core_t *core);
 
 #endif

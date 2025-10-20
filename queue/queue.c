@@ -79,8 +79,15 @@ int queue_append (queue_t **queue, queue_t *elem)
 
 int queue_remove (queue_t **queue, queue_t *elem)
 {
-    if (queue == NULL || elem == NULL) return -1;
-    if (_find_element(*queue, elem) != 0) return -1;
+    if (queue == NULL || elem == NULL) {
+        LOG_WARN("queue_remove: cannot remove element from NULL queue or NULL element");
+        return -1;
+    }
+    
+    if (_find_element(*queue, elem) != 0) {
+        LOG_WARN("queue_remove: element %p not found in queue %p", (void*)elem, (void*)(*queue));
+        return -1;
+    }
 
     LOG_TRACE("queue_remove: removing element %p from queue %p", (void*)elem, (void*)(*queue));
 

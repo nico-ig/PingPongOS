@@ -6,6 +6,9 @@
 
 #include "queue.h"
 
+#define MIN_PRIORITY -20
+#define MAX_PRIORITY 20
+
 typedef enum {
     TASK_STATUS_CREATED = 0,
     TASK_STATUS_READY = 1,
@@ -40,8 +43,10 @@ typedef struct task_t
   short quantum;			
   short remaining_quantum;
   task_time_t time;
+  unsigned int wakeup_time;
   int exit_code;
   queue_t *waiting_queue;
+  bool switch_enabled;
 } task_t;
 
 typedef struct ppos_core {
@@ -49,7 +54,12 @@ typedef struct ppos_core {
   task_t *current_task;
   task_t *dispatcher_task;
   task_t *main_task;
-  queue_t *ready_queue;
+  task_t *ready_queue;
+  task_t *sleep_queue;
+  int (*add_task_to_queue)(task_t *task, task_t **queue);
+  int (*remove_task_from_queue)(task_t *task, task_t **queue);
+  void (*enable_task_switch)(void);
+  void (*block_task_switch)(void);
 } ppos_core_t;
 
 typedef struct
